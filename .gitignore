@@ -1,3 +1,17 @@
+# tex related files
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cbl
+*.cb2
+*.lb    
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

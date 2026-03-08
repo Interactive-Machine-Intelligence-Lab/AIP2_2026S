@@ -1,6 +1,8 @@
 # AIP2_2026S
 Working repository for UNIST Introduction to Artificial Intelligence Programming 2
 
+All rights reserved by UNIST.
+
 ## Dependency of each lab sessions
 
 ## Lab Session Dependency Map

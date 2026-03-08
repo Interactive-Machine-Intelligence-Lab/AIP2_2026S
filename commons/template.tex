@@ -1,0 +1,90 @@
+\documentclass[handout]{beamer}
+%\documentclass{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage{import}
+\usepackage{multirow}
+
+\usepackage{utopia} %font utopia imported
+
+\usetheme{Madrid}
+\usecolortheme{default}
+
+%------------------------------------------------------------
+%This block of code defines the information to appear in the
+%Title page
+\title[Introduction to Artificial Intelligence Programming 2] %optional
+{Lab session 0}
+
+\author[Yunpyo An] % (optional)
+{Yunpyo An\inst{1}}
+
+\institute[UNIST] % (optional)
+{
+  \inst{1}%
+  Ulsan National Institute of Science and Technology
+}
+
+\date % (optional)
+{Mar 11, 2026}
+
+\logo{\includegraphics[height=1.5cm]{unist.png}}
+
+%End of title page configuration block
+%------------------------------------------------------------
+
+%------------------------------------------------------------
+%The next block of commands puts the table of contents at the 
+%beginning of each section and highlights the current section:
+
+\AtBeginSection[]
+{
+  \begin{frame}
+    \frametitle{Table of Contents}
+    \tableofcontents[currentsection]
+  \end{frame}
+}
+%------------------------------------------------------------
+
+
+\begin{document}
+
+%The next statement creates the title page.
+\frame{\titlepage}
+
+
+%---------------------------------------------------------
+%This block of code is for the table of contents after
+%the title page
+\begin{frame}
+\frametitle{Table of Contents}
+\tableofcontents
+\end{frame}
+%---------------------------------------------------------
+
+%\import{contents/}{current.tex}
+
+
+%---------------------------------------------------------
+
+\begin{frame}[allowframebreaks]{References}
+    \bibliographystyle{IEEEtran}
+    \bibliography{./ref.bib}
+\end{frame}
+
+%---------------------------------------------------------
+
+\begin{frame}{}
+  \centering \Large
+  \emph{Questions?}
+\end{frame}
+
+%---------------------------------------------------------
+
+\begin{frame}{}
+    \centering \Large
+    \emph{END}
+\end{frame}
+  
+%---------------------------------------------------------
+
+\end{document}
