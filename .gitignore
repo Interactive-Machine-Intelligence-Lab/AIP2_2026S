@@ -10,7 +10,11 @@
 *.fot
 *.cbl
 *.cb2
-*.lb    
+*.lb 
+*.fdb_latexmk   
+
+# old versions
+*old*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
