@@ -11,7 +11,11 @@
 *.cbl
 *.cb2
 *.lb 
-*.fdb_latexmk   
+*.fdb_latexmk 
+*.nav
+*.snm
+*.synctex.gz
+
 
 # old versions
 *old*
