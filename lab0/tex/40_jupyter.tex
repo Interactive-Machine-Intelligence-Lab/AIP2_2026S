@@ -1,0 +1,41 @@
+\section{Jupyter Notebooks}
+
+\begin{frame}{Jupyter Magic Commands}
+    Magic commands extend the IPython kernel.
+    \code{\%} applies to one line; \code{\%\%} applies to the entire cell.
+
+    \vspace{0.5em}
+    \begin{tabular}{lll}
+    \toprule
+    Magic & Scope & Use case \\
+    \midrule
+    \code{\%\%time}     & cell & One-shot wall-clock timing \\
+    \code{\%\%timeit}   & cell & Statistical benchmark (mean $\pm$ std) \\
+    \code{\%debug}      & line & Post-mortem debugger after an exception \\
+    \code{\%prun}       & line & \code{cProfile} on a single statement \\
+    \code{\%lprun}      & line & Line-by-line timing (\code{line\_profiler}) \\
+    \code{\%who}        & line & List all variables in scope \\
+    \code{\%load\_ext}  & line & Load an IPython extension \\
+    \bottomrule
+    \end{tabular}
+\end{frame}
+
+\begin{frame}[fragile]{Profiling Example}
+    \begin{lstlisting}
+%%time
+import numpy as np
+result = sum([i**2 for i in range(1000000)])
+print(f"Result: {result}")
+    \end{lstlisting}
+
+    \begin{lstlisting}
+%%timeit
+sum([i**2 for i in range(10000)])
+    \end{lstlisting}
+
+    \begin{lstlisting}
+# line-by-line profiler
+%load_ext line_profiler
+%lprun -f py_matmul py_matmul(A, B)
+    \end{lstlisting}
+\end{frame}

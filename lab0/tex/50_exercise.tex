@@ -1,0 +1,70 @@
+\section{Exercise}
+
+\begin{frame}{Exercise}
+    Implement the \code{TODO}s in \code{lab0.ipynb}:
+
+    \begin{enumerate}
+        \item \textbf{Inner product of two Vectors}
+        \begin{itemize}
+            \item \code{inner\_product(v1, v2)} $\;\to\; x_1 x_2 + y_1 y_2$
+        \end{itemize}
+        \item \textbf{2D Object dynamics}
+        \begin{itemize}
+            \item \code{MyObject.set\_velocity(v)} --- store a velocity \code{Vector}
+            \item \code{MyObject.move(time)} --- update position: $p \mathrel{+}= v \cdot t$
+        \end{itemize}
+        \item \textbf{Fix shallow copy}
+    \end{enumerate}
+
+    \vspace{0.5em}
+    \begin{block}{Submission}
+    Export \code{lab0.ipynb} as PDF and rename it \code{<student\_id>\_lab0.pdf}.
+    \end{block}
+\end{frame}
+
+
+\begin{frame}{Class Hierarchy: Vector \& MyObject}
+\begin{center}
+\begin{tikzpicture}[
+  font=\ttfamily\scriptsize,
+  hdr/.style={draw=unistnavy, fill=unistnavy, text=white,
+              font=\normalfont\small\bfseries, align=center,
+              minimum width=4.5cm, minimum height=0.65cm, inner sep=3pt},
+  atr/.style={draw=unistnavy, fill=gra, align=left,
+              minimum width=4.5cm, inner sep=5pt},
+  mth/.style={draw=unistnavy, fill=white, align=left,
+              minimum width=4.5cm, inner sep=5pt},
+]
+  % ── Vector (left) ─────────────────────────────────────────────────────────
+  \node[hdr] (vH) at (-3.2, 0) {Vector};
+  \node[atr, below=0pt of vH] (vA) {
+    \textcolor{oge}{x} : float \\[2pt]
+    \textcolor{oge}{y} : float
+  };
+  \node[mth, below=0pt of vA] (vM) {
+    \_\_init\_\_(x, y)  \\[2pt]
+    \_\_str\_\_()       \\[2pt]
+    \_\_add\_\_(other)  \\[2pt]
+    \_\_mul\_\_(scalar) \\[2pt]
+    \_\_getitem\_\_(i)
+  };
+
+  % ── MyObject (right) ──────────────────────────────────────────────────────
+  \node[hdr] (oH) at (3.2, 0) {MyObject};
+  \node[atr, below=0pt of oH] (oA) {
+    \textcolor{oge}{velocity} : Vector
+  };
+  \node[mth, below=0pt of oA] (oM) {
+    set\_velocity(v : Vector) \\[2pt]
+    move(time : float)
+  };
+
+  % ── Inheritance arrow (open triangle = UML generalisation) ─────────────────
+  \draw[-{Triangle[open, length=9pt, width=8pt]}, thick, color=unistnavy]
+    (oH.west) -- (vH.east)
+    node[midway, above=2pt, font=\normalfont\itshape\tiny, text=unistnavy]
+      {inherits};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+

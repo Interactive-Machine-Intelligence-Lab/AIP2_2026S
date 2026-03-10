@@ -1,0 +1,104 @@
+\section{Review Python}
+
+\begin{frame}[fragile]{Types and Variables}
+    Python is \textbf{dynamically typed} --- you can assign any type without declaration.
+
+    \begin{lstlisting}
+x    = 42              # int
+y    = 3.14            # float
+s    = "Hello, AIP2!" # str
+lst  = [1, 2, 3, 4, 5] # list
+flag = True            # bool
+
+print(type(x), type(y), type(s))
+    \end{lstlisting}
+
+    \begin{itemize}
+        \item \code{type(obj)} returns the runtime type of any object.
+        \item All Python values are objects --- including \code{int}, \code{bool}, \code{str}.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Iterables}
+    \begin{columns}[t]
+    \column{0.5\textwidth}
+    \begin{block}{Built-in collections}
+    \begin{lstlisting}
+my_list  = [1, 2, 3]       # mutable
+my_tuple = (1, 2, 3)       # immutable
+my_set   = {1, 2, 3}       # unique
+my_dict  = {"a": 1, "b": 2}
+    \end{lstlisting}
+    \end{block}
+
+    \column{0.5\textwidth}
+    \begin{block}{Iteration}
+    \begin{lstlisting}
+for item in my_list:
+    print(item)
+
+for k, v in my_dict.items():
+    print(k, v)
+
+# slicing
+print(my_list[1:3])  # [2, 3]
+    \end{lstlisting}
+    \end{block}
+    \end{columns}
+
+    \begin{block}{Generators --- lazy evaluation}
+    \begin{lstlisting}
+def count_up_to(n):
+    count = 1
+    while count <= n:
+        yield count
+        count += 1
+
+for number in count_up_to(5):
+    print(number)   # 1 2 3 4 5
+    \end{lstlisting}
+    \end{block}
+\end{frame}
+
+\begin{frame}[fragile]{Functions}
+    Defined with \code{def}; \code{return} sends a value back.
+
+    \begin{lstlisting}
+def sign(x):
+    if x > 0:
+        return "positive"
+    elif x < 0:
+        return "negative"
+    else:
+        return "zero"
+
+for num in [10, -5, 0]:
+    print(f"{num} is {sign(num)}")
+    \end{lstlisting}
+
+    \begin{itemize}
+        \item Use f-strings (\code{f"\{expr\}"}) for readable formatting.
+        \item Functions are first-class objects --- passable as arguments.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Python Libraries}
+    \begin{lstlisting}
+import math
+print(math.sqrt(16))   # 4.0
+print(math.pi)         # 3.14159...
+
+import numpy as np
+print(np.array([1, 2, 3]))  # [1 2 3]
+print(np.pi)                # 3.14159...
+    \end{lstlisting}
+
+    \vspace{0.5em}
+    Key libraries for this course:
+    \begin{itemize}
+        \item \code{numpy}         --- numerical arrays, linear algebra
+        \item \code{matplotlib}    --- data visualisation
+        \item \code{torch}         --- deep learning (from Lab 3 onward)
+        \item \code{line-profiler} --- line-by-line profiling
+    \end{itemize}
+\end{frame}

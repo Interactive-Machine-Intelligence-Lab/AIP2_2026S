@@ -1,0 +1,46 @@
+\section{Environment Setup}
+
+\begin{frame}{Environment Setup}
+    In lab sessions we use \textbf{Google Colab} --- a free Jupyter Notebook environment with pre-installed libraries.
+    If you have your own GPU, set up a local \code{uv} environment instead.
+
+    \begin{itemize}
+        \item \code{uv} is a Rust-based Python package \& project manager (Astral, 2024).
+        \item Replaces \code{pip + venv + pip-tools} with a single binary.
+        \item Produces a \code{uv.lock} for exact reproducibility.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Environment Setup --- Install \& Create}
+    \begin{block}{Install uv}
+    \begin{lstlisting}[language=bash]
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+    \end{lstlisting}
+    \end{block}
+
+    \begin{block}{Create / Reproduce}
+    \begin{lstlisting}[language=bash]
+uv init aip2-labs && cd aip2-labs
+uv add numpy matplotlib jupyter line-profiler pandoc
+uv run jupyter notebook
+# -- or, if you already cloned the repo --
+uv sync && uv run jupyter notebook
+    \end{lstlisting}
+    \end{block}
+\end{frame}
+
+\begin{frame}[fragile]{Shell Commands in Notebooks}
+    In Google Colab (or any Jupyter kernel), prefix a line with \code{!} to run it in the shell.
+
+    \begin{lstlisting}
+# '!' delegates a line to the shell
+!python --version
+!pip show numpy | grep -E 'Name|Version'
+
+# Check GPU availability
+!nvidia-smi
+    \end{lstlisting}
+\end{frame}

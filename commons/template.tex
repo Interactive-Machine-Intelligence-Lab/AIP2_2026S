@@ -1,26 +1,81 @@
-\documentclass[handout]{beamer}
+\documentclass[aspectratio=169,10pt]{beamer}
 %\documentclass{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+\usefonttheme{professionalfonts}
+
+\definecolor{unistnavy}{RGB}{0,28,84}
+\definecolor{unistemerald}{RGB}{69,193,195}
+\definecolor{gra}{RGB}{245,245,250}
+\definecolor{grn}{RGB}{30,130,80}
+\definecolor{oge}{RGB}{210,100,20}
+
+\setbeamercolor{title}{bg=unistnavy}
+\setbeamercolor{frametitle}{bg=unistnavy,fg=white}
+\setbeamercolor{block title}{bg=unistnavy,fg=white}
+\setbeamercolor{block body}{bg=gra}
+\setbeamercolor{alerted text}{fg=oge}
+\setbeamercolor{example text}{fg=grn}
+\setbeamercolor{footline}{bg=unistnavy,fg=white}
+\setbeamercolor{section in head/foot}{bg=unistemerald,fg=white}
+\setbeamercolor{title in head/foot}{bg=unistemerald,fg=white}
+\setbeamercolor{author in head/foot}{bg=unistemerald,fg=white}
+\setbeamercolor{date in head/foot}{bg=unistemerald,fg=white}
+
 \usepackage[utf8]{inputenc}
 \usepackage{import}
 \usepackage{multirow}
 
 \usepackage{utopia} %font utopia imported
 
-\usetheme{Madrid}
-\usecolortheme{default}
+\usepackage[T1]{fontenc}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{multicol}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,urlcolor=unistnavy,linkcolor=unistnavy}
+
+% Safe listing style: no caption trickery, no special chars
+\lstdefinelanguage{SafePython}{
+  keywords={def,class,return,for,in,if,else,import,from,yield,
+            lambda,True,False,None,self,super,and,or,not,with,as,pass},
+  sensitive=true,
+  comment=[l]{\#},
+  string=[b]{"}, morestring=[b]{'},
+}
+\lstset{
+  language=SafePython,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{unistnavy}\bfseries,
+  commentstyle=\color{gra}\itshape,
+  stringstyle=\color{grn!80!black},
+  backgroundcolor=\color{gra},
+  frame=single,
+  rulecolor=\color{unistnavy!30},
+  framesep=3pt,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  numbers=left,
+  numberstyle=\tiny\color{gra},
+  numbersep=4pt,
+}
 
 %------------------------------------------------------------
 %This block of code defines the information to appear in the
 %Title page
-\title[Introduction to Artificial Intelligence Programming 2] %optional
+\title[Introduction to AIP2] %optional
 {Lab session 0}
 
-\author[Yunpyo An] % (optional)
-{Yunpyo An\inst{1}}
+\author{UNIST}
 
 \institute[UNIST] % (optional)
 {
-  \inst{1}%
   Ulsan National Institute of Science and Technology
 }
 

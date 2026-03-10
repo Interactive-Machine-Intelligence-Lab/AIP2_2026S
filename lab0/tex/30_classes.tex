@@ -1,0 +1,208 @@
+\section{Classes and Objects}
+
+\begin{frame}[fragile]{Classes and Objects}
+    Every Python value is an \textbf{object}. A \textbf{class} is its blueprint.
+
+    \begin{lstlisting}
+class Vector:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __str__(self):
+        return f"Vector({self.x}, {self.y})"
+
+    def __add__(self, other):
+        return Vector(self.x + other.x,
+                      self.y + other.y)
+
+v1 = Vector(3, 4)
+v2 = Vector(1, 2)
+print(v1 + v2)   # Vector(4, 6)
+    \end{lstlisting}
+\end{frame}
+
+
+
+\begin{frame}{Dunder Methods}
+    \textbf{Magic (dunder) methods} let your class integrate with Python syntax.
+
+    \vspace{0.5em}
+    \begin{tabular}{lll}
+    \toprule
+    Method & Triggered by & PyTorch analogy \\
+    \midrule
+    \code{\_\_init\_\_}     & \code{MyClass(...)}   & layer definitions \\
+    \code{\_\_repr\_\_}     & \code{repr(obj)}      & model summary string \\
+    \code{\_\_call\_\_}     & \code{obj(x)}         & dispatches to \code{forward(x)} \\
+    \code{\_\_len\_\_}      & \code{len(obj)}       & \code{Dataset.\_\_len\_\_} \\
+    \code{\_\_getitem\_\_}  & \code{obj[i]}         & \code{Dataset.\_\_getitem\_\_} \\
+    \code{\_\_add\_\_}      & \code{a + b}          & tensor operator overloading \\
+    \bottomrule
+    \end{tabular}
+
+    \vspace{0.5em}
+    \alert{Why now?} Every PyTorch model subclasses \code{torch.nn.Module} --- the same pattern.
+\end{frame}
+
+\begin{frame}[fragile]{Inheritance and \code{super()}}
+    \begin{lstlisting}
+class Module:
+    def __call__(self, x):
+        return self.forward(x)
+    def forward(self, x):
+        raise NotImplementedError
+
+class ReLU(Module):
+    def forward(self, x):
+        return max(0.0, x)
+
+class Sequential(Module):
+    def __init__(self, *layers):
+        self.layers = layers
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+model = Sequential(ReLU())
+print(model(-1.0))  # 0.0
+    \end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{Copy Objects}
+    \alert{Common mistake:} assignment creates a \textbf{reference}, not a copy.
+
+    \begin{columns}[t]
+    \column{0.5\textwidth}
+    \begin{block}{Shallow copy}
+    \begin{lstlisting}
+import copy
+lst1 = [1, 2, [3, 4]]
+lst2 = lst1.copy()
+
+lst2[0] = 99     # lst1 unchanged
+lst2[2][0] = 99  # lst1 also changes!
+    \end{lstlisting}
+    \end{block}
+
+    \column{0.5\textwidth}
+    \begin{block}{Deep copy}
+    \begin{lstlisting}
+import copy
+lst1 = [1, 2, [3, 4]]
+lst2 = copy.deepcopy(lst1)
+
+lst2[2][0] = 99  # lst1 unchanged
+    \end{lstlisting}
+    \end{block}
+    \end{columns}
+
+    \vspace{0.5em}
+    Use \code{copy.deepcopy()} whenever your object contains nested mutable structures.
+\end{frame}
+
+\begin{frame}{Copy Semantics in Memory}
+\begin{center}
+\scalebox{0.88}{%
+\begin{tikzpicture}[
+  font=\scriptsize,
+  var/.style={draw=unistnavy, fill=unistemerald!30, rounded corners=2pt,
+              font=\ttfamily\scriptsize, inner sep=3pt,
+              minimum width=1.4cm, minimum height=0.45cm},
+  obj/.style={draw=unistnavy, fill=gra, font=\ttfamily\scriptsize,
+              inner sep=3pt, minimum width=2.1cm, minimum height=0.45cm},
+  lbl/.style={font=\normalfont\bfseries\small, text=unistnavy},
+  sub/.style={font=\ttfamily\tiny, text=gray},
+  ptr/.style={-{Stealth[length=5pt]}, thick},
+]
+
+  %% Column dividers
+  \draw[gray!35, dashed, thin] (-2.1, 2.9) -- (-2.1, -2.0);
+  \draw[gray!35, dashed, thin] ( 2.1, 2.9) -- ( 2.1, -2.0);
+
+  % ── 1. Reference assignment ───────────────────────────────────────────────
+  \node[lbl] at (-4.2, 2.7) {Reference};
+  \node[sub] at (-4.2, 2.3) {list2 = list1};
+
+  \node[var] (r1) at (-4.9, 1.6) {list1};
+  \node[var] (r2) at (-3.5, 1.6) {list2};
+
+  \node[obj] (rA) at (-4.2, 0.5) {[\,1,\ 2,\ \textcolor{oge}{\textbullet}\,]};
+  \node[obj] (rN) at (-4.2,-0.7) {[\,3,\ 4\,]};
+
+  \draw[ptr, color=unistnavy] (r1.south) to[out=-90,in=150] (rA.north west);
+  \draw[ptr, color=unistnavy] (r2.south) to[out=-90,in=30]  (rA.north east);
+  \draw[ptr, color=oge]       (rA.south) -- (rN.north);
+
+  \node[font=\normalfont\tiny, text=oge] at (-4.2,-1.4) {same object!};
+
+  % ── 2. Shallow copy ───────────────────────────────────────────────────────
+  \node[lbl] at (0, 2.7) {Shallow Copy};
+  \node[sub] at (0, 2.3) {list2 = list1.copy()};
+
+  \node[var] (s1) at (-0.75, 1.6) {list1};
+  \node[var] (s2) at ( 0.75, 1.6) {list2};
+
+  \node[obj] (sA) at (-0.75, 0.5) {[\,1,\ 2,\ \textcolor{oge}{\textbullet}\,]};
+  \node[obj] (sB) at ( 0.75, 0.5) {[\,1,\ 2,\ \textcolor{oge}{\textbullet}\,]};
+  \node[obj] (sN) at ( 0.0, -0.7) {[\,3,\ 4\,]};
+
+  \draw[ptr, color=unistnavy] (s1.south) -- (sA.north);
+  \draw[ptr, color=unistnavy] (s2.south) -- (sB.north);
+  \draw[ptr, color=oge] (sA.south) to[out=-90,in=150] (sN.north west);
+  \draw[ptr, color=oge] (sB.south) to[out=-90,in=30]  (sN.north east);
+
+  \node[font=\normalfont\tiny, text=oge] at (0,-1.4) {shared nested!};
+
+  % ── 3. Deep copy ──────────────────────────────────────────────────────────
+  \node[lbl] at (4.2, 2.7) {Deep Copy};
+  \node[sub] at (4.2, 2.3) {copy.deepcopy(list1)};
+
+  \node[var] (d1) at (3.5, 1.6) {list1};
+  \node[var] (d2) at (4.9, 1.6) {list2};
+
+  \node[obj] (dA)  at (3.5, 0.5) {[\,1,\ 2,\ \textcolor{grn}{\textbullet}\,]};
+  \node[obj] (dB)  at (4.9, 0.5) {[\,1,\ 2,\ \textcolor{grn}{\textbullet}\,]};
+  \node[obj] (dN1) at (3.5,-0.7) {[\,3,\ 4\,]};
+  \node[obj] (dN2) at (4.9,-0.7) {[\,3,\ 4\,]};
+
+  \draw[ptr, color=unistnavy] (d1.south) -- (dA.north);
+  \draw[ptr, color=unistnavy] (d2.south) -- (dB.north);
+  \draw[ptr, color=grn] (dA.south) -- (dN1.north);
+  \draw[ptr, color=grn] (dB.south) -- (dN2.north);
+
+  \node[font=\normalfont\tiny, text=grn] at (4.2,-1.4) {fully independent};
+
+\end{tikzpicture}}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Assert and Try-Except}
+    \begin{columns}[t]
+    \column{0.5\textwidth}
+    \begin{block}{assert}
+    \begin{lstlisting}
+def add(a, b):
+    return a + b
+
+assert add(2, 3) == 5
+assert add(-1, 1) == 0
+print("PASSED!")
+    \end{lstlisting}
+    Raises \code{AssertionError} if \code{False}.
+    \end{block}
+
+    \column{0.5\textwidth}
+    \begin{block}{try-except}
+    \begin{lstlisting}
+try:
+    t = (1, 2, 3)
+    t[0] = 10  # TypeError
+except TypeError as e:
+    print("Error:", e)
+    \end{lstlisting}
+    Catches exceptions gracefully.
+    \end{block}
+    \end{columns}
+\end{frame}
