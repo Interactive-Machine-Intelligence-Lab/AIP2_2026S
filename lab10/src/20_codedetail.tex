@@ -1,0 +1,449 @@
+\section{Reading microGPT, Line by Line}
+
+% ----------------------------------------------------------------------
+\begin{frame}
+    \frametitle{Why This File?}
+
+    \begin{quote}
+        ``The most atomic way to train and run inference for a GPT in pure,
+        dependency-free Python. \alert{This file is the complete algorithm.}
+        Everything else is just efficiency.'' --- @karpathy
+    \end{quote}
+
+    \begin{itemize}
+        \item One file, \alert{199 lines}, \alert{zero} external libraries --- no PyTorch, no NumPy.
+        \item Every ``magic'' call you used before (\code{loss.backward()}, \code{Adam}, attention) is \alert{written out by hand} here. Nothing left to hide behind.
+        \item It trains on a dataset of 32{,}000 names, then invents new ones --- on your laptop, in about a minute.
+    \end{itemize}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why read \emph{this} instead of the real PyTorch source?
+
+    \pause
+
+    Because PyTorch is $\sim$3 million lines optimized for speed. The \emph{algorithm} fits in 199. Today we separate the algorithm from the efficiency.
+
+    \vfill
+    {\footnotesize \url{https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95}}
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}
+    \frametitle{The Map of the File}
+
+    \begin{center}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{lll}
+        \textbf{Lines} & \textbf{What} & \textbf{You know it from} \\\hline
+        14--27   & dataset + tokenizer        & Lab 0 (strings, lists) \\
+        29--72   & \code{Value}: autograd     & Lab 6 (it was a black box) \\
+        74--90   & parameters                 & every lab \\
+        92--144  & the model \code{gpt()}     & \alert{today's attention} + Lab 6 MLP \\
+        146--149 & Adam buffers               & Lab 6 (optimizer) \\
+        151--184 & training loop              & \emph{unchanged} from your labs \\
+        186--200 & inference (sampling)       & new, and tiny \\
+    \end{tabular}
+    \end{center}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} which part do you expect to be the longest?
+
+    \pause
+
+    The model is $\sim$50 lines. The autograd engine is $\sim$40.\\
+    \alert{The training loop is shorter than your Lab 6 one.} There is no long part.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Dataset and Tokenizer (lines 14--27)}
+
+\begin{lstlisting}
+docs = [line.strip() for line in open('input.txt') if line.strip()]
+
+# unique characters in the dataset become token ids 0..n-1
+uchars = sorted(set(''.join(docs)))
+BOS = len(uchars)            # special Beginning of Sequence token
+vocab_size = len(uchars) + 1 # +1 is for BOS
+\end{lstlisting}
+
+    The tokenizer is \alert{two lines}: every distinct character gets an integer id.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} the dataset is lowercase names (\texttt{emma}, \texttt{olivia}, \dots). What is \code{vocab\_size}?
+
+    \pause
+
+    $26$ letters $+ 1$ BOS $= \alert{27}$ tokens. (Real GPTs: $\sim$100k tokens, multi-character pieces --- same idea, bigger table.)
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why one \emph{extra} token, BOS?
+
+    \pause
+
+    A name is wrapped as \code{[BOS] e m m a [BOS]}. The first BOS means \alert{``start''}; predicting the second means \alert{``I am done''} --- it's how the model learns when to \emph{stop}.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{\texttt{Value}: a Number That Remembers (lines 30--45)}
+
+\begin{lstlisting}
+class Value:
+    def __init__(self, data, children=(), local_grads=()):
+        self.data = data          # the number itself
+        self.grad = 0             # d(loss)/d(this), filled in backward
+        self._children = children # which Values produced me
+        self._local_grads = local_grads # d(me)/d(each child)
+
+    def __add__(self, other):
+        return Value(self.data + other.data, (self, other), (1, 1))
+
+    def __mul__(self, other):
+        return Value(self.data * other.data, (self, other),
+                     (other.data, self.data))
+\end{lstlisting}
+
+    Every arithmetic operation returns a \emph{new} \code{Value} that remembers \alert{who made it} and \alert{the local derivative}. The whole forward pass silently builds a graph.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} in \code{\_\_mul\_\_}, why are the local grads \code{(other.data, self.data)} --- \emph{swapped}?
+
+    \pause
+
+    Calculus: if $y = a \cdot b$, then $\partial y / \partial a = b$ and $\partial y / \partial b = a$.\\
+    Each input's derivative is \alert{the other input}. (For $+$: both are just $1$.)
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{\texttt{backward()}: the 14 Lines That Are PyTorch (lines 59--72)}
+
+\begin{lstlisting}
+def backward(self):
+    topo = []
+    visited = set()
+    def build_topo(v):           # order nodes so that every node
+        if v not in visited:     # comes after its children
+            visited.add(v)
+            for child in v._children:
+                build_topo(child)
+            topo.append(v)
+    build_topo(self)
+    self.grad = 1                # d(loss)/d(loss) = 1
+    for v in reversed(topo):     # walk the graph backwards
+        for child, local_grad in zip(v._children, v._local_grads):
+            child.grad += local_grad * v.grad   # chain rule!
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why \code{child.grad \alert{+=}} and not \code{=}\,?
+
+    \pause
+
+    A value can be \alert{used twice} (e.g.\ a residual: $x$ feeds both the block \emph{and} the skip path). Each use contributes a gradient; the chain rule says \alert{add them up}.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{The Parameters (lines 74--90)}
+
+\begin{lstlisting}
+n_layer = 1     # depth of the transformer (number of blocks)
+n_embd = 16     # width of the network (embedding dimension)
+block_size = 16 # max context length (longest name: 15 chars)
+n_head = 4      # number of attention heads
+matrix = lambda nout, nin, std=0.08: \
+    [[Value(random.gauss(0, std)) for _ in range(nin)]
+     for _ in range(nout)]
+state_dict = {'wte': matrix(vocab_size, n_embd),   # token emb.
+              'wpe': matrix(block_size, n_embd),   # position emb.
+              'lm_head': matrix(vocab_size, n_embd)}
+for i in range(n_layer):  # per block: wq, wk, wv, wo, fc1, fc2
+    state_dict[f'layer{i}.attn_wq'] = matrix(n_embd, n_embd)
+    ...
+\end{lstlisting}
+
+    A ``matrix'' is a plain \alert{list of lists of \code{Value}s}. The whole model is one dictionary.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} note \code{n\_layer = 1}. Our formula was $[\,\text{attn} + \text{MLP}\,]\times N$ --- so $N$ here is\dots?
+
+    \pause
+
+    $N = \alert{1}$. Don't look for a stack --- this GPT is one block deep, $4{,}192$ parameters total. GPT-2 is the same shape with $N=12$ and 124M parameters.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Three Helpers You Already Know (lines 94--106)}
+
+\begin{lstlisting}
+def linear(x, w):    # this IS nn.Linear (no bias)
+    return [sum(wi * xi for wi, xi in zip(wo, x)) for wo in w]
+
+def softmax(logits): # this IS F.softmax
+    max_val = max(val.data for val in logits)
+    exps = [(val - max_val).exp() for val in logits]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+def rmsnorm(x):      # the simpler cousin of LayerNorm (Lab 7)
+    ms = sum(xi * xi for xi in x) / len(x)
+    return [xi * (ms + 1e-5) ** -0.5 for xi in x]
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why subtract \code{max\_val} before \code{exp()}? Doesn't that change the answer?
+
+    \pause
+
+    No: $\frac{e^{x_i - c}}{\sum_j e^{x_j - c}} = \frac{e^{x_i}}{\sum_j e^{x_j}}$ --- the $e^{-c}$ cancels. But \code{math.exp(800)} \alert{overflows}; shifting so the max is $0$ keeps every \code{exp} $\le 1$. Pure numerics, zero math change.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{\texttt{gpt()}, Act 1: Embeddings (lines 108--112)}
+
+\begin{lstlisting}
+def gpt(token_id, pos_id, keys, values):
+    tok_emb = state_dict['wte'][token_id] # WHAT the token is
+    pos_emb = state_dict['wpe'][pos_id]   # WHERE the token is
+    x = [t + p for t, p in zip(tok_emb, pos_emb)]
+    x = rmsnorm(x)
+\end{lstlisting}
+
+    ``Embedding'' = \alert{pick a row of a table}. No multiplication needed --- the token id is just an index.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why must we \emph{add} a position vector? (Hint: look at the attention formula --- where does the token's \emph{position} enter it?)
+
+    \pause
+
+    It doesn't! Attention is a weighted average over $Q\!\cdot\!K$ similarities --- shuffle the inputs and the same weights follow them. Attention is \alert{order-blind}, so position must be injected \alert{into the vectors themselves}.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} and what are \code{keys}, \code{values} in the signature? Hold that thought --- it's the next slide's punchline.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{\texttt{gpt()}, Act 2: Attention (lines 114--131)}
+
+\begin{lstlisting}
+q = linear(x, state_dict[f'layer{li}.attn_wq'])  # what am I looking for?
+k = linear(x, state_dict[f'layer{li}.attn_wk'])  # what do I offer?
+v = linear(x, state_dict[f'layer{li}.attn_wv'])  # what do I carry?
+keys[li].append(k)     # remember my key...
+values[li].append(v)   # ...and my value, for everyone after me
+for h in range(n_head):
+    ...
+    attn_logits = [sum(q_h[j] * k_h[t][j] for j in range(head_dim))
+                   / head_dim**0.5 for t in range(len(k_h))]
+    attn_weights = softmax(attn_logits)
+    head_out = [sum(attn_weights[t] * v_h[t][j]
+                    for t in range(len(v_h))) for j in range(head_dim)]
+\end{lstlisting}
+
+    This is $\mathrm{softmax}(QK^\top/\sqrt{d})\,V$, written as loops. You derived it an hour ago.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} the slides said causal masking = ``set future scores to $-\infty$.'' \alert{Find the $-\infty$ in this code.}
+
+    \pause
+
+    \alert{There isn't one!} The model processes \alert{one token at a time}, appending each $k, v$ to a growing list. At position $t$, the lists contain \emph{only positions} $0 \dots t$ --- \alert{the future does not exist yet}. Masking by construction. (Big models call these growing lists the \alert{KV cache}.)
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Attention: Two Honest Footnotes}
+
+    \textbf{1. The scale.} The code divides by \code{head\_dim**0.5}, not $\sqrt{n\_embd}$:
+\begin{lstlisting}
+... / head_dim**0.5 ...   # head_dim = n_embd // n_head = 4
+\end{lstlisting}
+    Our slide's $\sqrt{d}$ was the simplification: the dot product happens \alert{per head}, in $d_{\text{head}} = 4$ dimensions, so the right scale is $\sqrt{4} = 2$. Same reason, correct bookkeeping.
+
+    \pause
+
+    \textbf{2. Multi-head = slicing.} No new machinery:
+\begin{lstlisting}
+hs = h * head_dim
+q_h = q[hs:hs+head_dim]   # head h sees dims [hs, hs+4)
+\end{lstlisting}
+    Each of the 4 heads runs the \emph{same} attention on its own \alert{16/4 = 4-dim slice}, then the outputs are concatenated back (\code{x\_attn.extend(head\_out)}).
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why bother with 4 small heads instead of 1 big one?
+
+    \pause
+
+    Each head learns its \alert{own} $QK$ matching --- ``previous letter'', ``vowel or not'', \dots\\
+    Four specialists beat one generalist, for the same parameter count.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{\texttt{gpt()}, Act 3: Residual + MLP (lines 116--144)}
+
+\begin{lstlisting}
+x_residual = x                  # save the input  (Lab 9!)
+x = rmsnorm(x)                  # normalize       (Lab 7!)
+x = ...attention...             # the new thing   (today)
+x = linear(x_attn, state_dict[f'layer{li}.attn_wo'])
+x = [a + b for a, b in zip(x, x_residual)]  # add it back
+
+x_residual = x                  # and again for the MLP:
+x = rmsnorm(x)
+x = linear(x, state_dict[f'layer{li}.mlp_fc1'])  # 16 -> 64
+x = [xi.relu() for xi in x]                      # (Lab 6!)
+x = linear(x, state_dict[f'layer{li}.mlp_fc2'])  # 64 -> 16
+x = [a + b for a, b in zip(x, x_residual)]
+
+logits = linear(x, state_dict['lm_head'])  # 16 -> 27 scores
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} how much of this slide is new material?
+
+    \pause
+
+    \alert{Zero lines.} Residuals (Lab 9), normalization (Lab 7), Linear--ReLU--Linear (Lab 6).\\
+    The transformer block is attention \alert{plus your old toolbox}.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{The Training Loop (lines 151--172)}
+
+\begin{lstlisting}
+for step in range(num_steps):
+    doc = docs[step % len(docs)]   # one name per step
+    tokens = [BOS] + [uchars.index(ch) for ch in doc] + [BOS]
+    losses = []
+    for pos_id in range(n):        # predict each next char
+        token_id, target_id = tokens[pos_id], tokens[pos_id + 1]
+        logits = gpt(token_id, pos_id, keys, values)
+        probs = softmax(logits)
+        loss_t = -probs[target_id].log()  # cross-entropy!
+        losses.append(loss_t)
+    loss = (1 / n) * sum(losses)
+    loss.backward()
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} \code{-probs[target].log()} --- where have you seen this before?
+
+    \pause
+
+    It \alert{is} the cross-entropy loss from your classification labs. ``Predict the next character'' = a \alert{27-way classification problem}, solved $n$ times per name. A GPT is a classifier in a loop.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} untrained, the loss starts at $\approx 3.3$. Why that number?
+
+    \pause
+
+    A clueless model guesses uniformly: $p = \frac{1}{27}$, and $-\log\frac{1}{27} = \log 27 \approx \alert{3.3}$.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Adam, Demystified (lines 146--182)}
+
+\begin{lstlisting}
+m = [0.0] * len(params)  # 1st moment: running mean of grads
+v = [0.0] * len(params)  # 2nd moment: running mean of grad^2
+...
+lr_t = learning_rate * (1 - step / num_steps)  # linear decay
+for i, p in enumerate(params):
+    m[i] = beta1 * m[i] + (1 - beta1) * p.grad
+    v[i] = beta2 * v[i] + (1 - beta2) * p.grad ** 2
+    m_hat = m[i] / (1 - beta1 ** (step + 1))  # bias correction
+    v_hat = v[i] / (1 - beta2 ** (step + 1))
+    p.data -= lr_t * m_hat / (v_hat ** 0.5 + eps_adam)
+    p.grad = 0   # <-- this is optimizer.zero_grad()
+\end{lstlisting}
+
+    \code{optimizer.step()} was never magic: \alert{seven lines of running averages}. SGD with momentum (the $m$) and a per-parameter step size (divide by $\sqrt{v}$).
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} why must \code{p.grad = 0} at the end of every step?
+
+    \pause
+
+    Remember \code{backward()} does \code{grad \alert{+=}} \dots\ The graph is rebuilt fresh each step, but the \alert{parameters persist} --- without the reset, last step's gradients would leak into this one.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Inference: Make It Babble (lines 186--200)}
+
+\begin{lstlisting}
+temperature = 0.5  # in (0, 1], "creativity" dial
+keys, values = [[] for _ in range(n_layer)], [[] ...]
+token_id = BOS                       # start signal
+for pos_id in range(block_size):
+    logits = gpt(token_id, pos_id, keys, values)
+    probs = softmax([l / temperature for l in logits])
+    token_id = random.choices(range(vocab_size),
+                              weights=[p.data for p in probs])[0]
+    if token_id == BOS:              # model says "I'm done"
+        break
+    sample.append(uchars[token_id])
+\end{lstlisting}
+
+    Generation = the forward pass in a loop, \alert{feeding each output back in as the next input}.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} what does dividing the logits by \code{temperature} $= 0.5$ do?
+
+    \pause
+
+    It \alert{doubles} every logit before softmax $\Rightarrow$ gaps between scores grow $\Rightarrow$ the distribution gets \alert{sharper} (more confident, less random). As $T \to 0$: argmax only; at $T = 1$: the raw distribution.\\
+    The ``creativity'' slider in every chatbot UI is \emph{this division}.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}
+    \frametitle{``Everything Else Is Just Efficiency''}
+
+    \begin{center}
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{ll}
+        \textbf{microGPT (199 lines)} & \textbf{PyTorch / real GPTs} \\\hline
+        \code{Value} + \code{backward()} & \code{torch.Tensor} + autograd \\
+        list of lists of \code{Value} & \code{nn.Linear}, CUDA kernels \\
+        \code{linear()}, \code{softmax()}, \code{rmsnorm()} & \code{F.linear}, \code{F.softmax}, \code{nn.RMSNorm} \\
+        the Adam \code{for} loop & \code{torch.optim.Adam} \\
+        \code{keys.append(k)} & the KV cache \\
+        one token at a time & batches, GPUs, FlashAttention \\
+        27 tokens, 4{,}192 params & 100k tokens, $10^{11}$ params \\
+    \end{tabular}
+    \end{center}
+
+    \pause
+
+    \begin{center}
+        The right column changes \alert{how fast} it runs.\\
+        The left column is \alert{everything that it does}.\\[2mm]
+        Now: \code{python microgpt.py} --- watch the loss fall from $3.3$, and read the names it invents.
+    \end{center}
+\end{frame}

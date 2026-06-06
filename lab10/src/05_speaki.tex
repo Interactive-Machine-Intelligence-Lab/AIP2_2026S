@@ -1,0 +1,90 @@
+\section{Final Project}
+
+% Test: preset GIF macro - Choayo
+\begin{frame}
+    \frametitle{Fun Statistics}
+
+    \TwoColLeftMedia{
+        \ChoayoGif
+    }{
+        \begin{itemize}
+            \item Our grading system accepted 504 submissions in total.
+            \item The highest F1 score is 0.9942
+            \item The shortest runtime is 79.39 sec with 0.8190 F1 score. The shortest runtime with F1 score higher than 0.9 is 201.03 sec.
+            \item The longest runtime was 3555.8 sec. Note that the limitation is 3600 sec, so it was close to the limit.
+        \end{itemize}
+    }\footnote{Speaki is the part of the Trickal Re:vive, EPID games. Copyrights belong to EPID.}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Common Mistakes}
+
+    \TwoColLeftMedia{
+        \NerGif
+    }{
+        \textbf{Reject Points}
+        \begin{itemize}
+            \item \code{reject.fingerprint}: it may edited frozen cell by user... But most points are insert empty cell. Please check your code doesn't have any empty cell!
+            \item \code{reject.safety}: it may have some unsafe code. Please check your code doesn't have any unsafe code such as \code{os.system}, \code{subprocess}, \code{exec}, etc. OR external ANY import is not allowed.
+        \end{itemize}
+    }\footnote{Speaki is the part of the Trickal Re:vive, EPID games. Image copyrights belong to EPID.}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Common Mistakes}
+
+    \TwoColLeftMedia{
+        \SadGif
+    }{
+
+        \textbf{Other Notes}
+        \begin{itemize}
+            \item If there are already submitted the same code or your code is grading, please wait until the grading is finished. It may reject.
+            \item If your submitted \textbf{F1 score} is not higher than the previous submission, it may not change leaderboard. Please check your code before submission.
+        \end{itemize}
+    }\footnote{Speaki is the part of the Trickal Re:vive, EPID games. Image copyrights belong to EPID.}
+\end{frame}
+
+% Template: copy and reuse for left-image / right-content slides
+\begin{frame}
+    \frametitle{Remarks}
+
+    \TwoColLeftMedia{
+        % Replace with your image path
+        \LeftImageMedia{src/speaki.png}
+    }{
+        \textit{Please... check your code before submission. There are several runtime errors in the code... Don't debug at the submission.}
+
+        \medskip
+        \textit{Submitting is not pachinko... the result is deterministic, not luck. If the score didn't change, the code needs to change first.}
+
+        \medskip
+        \textit{By the way, why somebody try to change random seed?}
+    }\footnote{Speaki is the part of the Trickal Re:vive, EPID games. Image copyrights belong to EPID.}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Fair Play}
+
+    \TwoColLeftMedia{
+        \LeftImageMedia{src/badguy.jpg}
+    }{
+        \begin{center}
+            \textit{A friendly reminder: probing the grading system
+            is a violation of the course policy, not a challenge mode.
+            We log everything --- please keep it fair for everyone.}
+        \end{center}
+    }\footnote{Speaki is the part of the Trickal Re:vive, EPID games. Image copyrights belong to EPID.}
+\end{frame}
+
+% Template: copy and reuse for left-GIF / right-content slides
+\begin{frame}
+    \frametitle{Grading}
+
+    Kindly remarks, our grading consists as follows:
+    \begin{itemize}
+        \item Our test data is split into two parts: public and private. The public test data is used for the leaderboard, while the private test data is used for final grading at the end of the semester.
+        \item You need to check \textbf{runtime speed} of your code, part of our evaluation. We have a hour budget, but faster code is more credited. Remind, we only kept the \textbf{best F1 score} for each user.
+        \item We kindly remarks, there is \textbf{report} for this project. We expect more higher quality report for higher score. You may run several times and write your report based on your submissions. Please check your code before submission, build your hypothesis and test it with your local environment first.
+    \end{itemize}
+\end{frame}

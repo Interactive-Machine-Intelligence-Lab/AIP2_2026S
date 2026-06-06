@@ -1,0 +1,174 @@
+\section{From microGPT to PyTorch}
+
+% ----------------------------------------------------------------------
+\begin{frame}
+    \frametitle{Why Leave 199 Lines of Paradise?}
+
+    microGPT trains $4{,}192$ parameters in about a minute. Lovely.
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} GPT-2 has 124M parameters --- about $30{,}000\times$ more. Estimate the training time in pure Python.
+
+    \pause
+
+    Naive scaling: $30{,}000$ minutes $\approx$ \alert{3 weeks} --- for just 1{,}000 steps. Real models train for \emph{millions} of steps. Pure Python does not scale, for two reasons:
+    \begin{itemize}
+        \item Every number is a full \code{Value} \alert{object} --- hundreds of bytes and a Python method call per float.
+        \item Everything runs \alert{one scalar at a time} on \alert{one CPU core}. No vectorization, no GPU.
+    \end{itemize}
+
+    \pause
+
+    PyTorch fixes \emph{exactly} these two things --- and changes \alert{nothing else} about the algorithm.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}
+    \frametitle{The Migration Map (You Already Saw It)}
+
+    The closing table of the last chapter \emph{is} the migration plan. Read it left to right:
+
+    \begin{center}
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{lcl}
+        \textbf{Step} & & \textbf{Replace} \\\hline
+        1 & & \code{Value} lists $\to$ one \code{torch.Tensor} \\
+        2 & & \code{linear()}, \code{softmax()}, \code{rmsnorm()} $\to$ \code{nn} / \code{F} calls \\
+        3 & & per-token \code{for} loops $\to$ one batched matrix multiply \\
+        4 & & the Adam \code{for} loop $\to$ \code{torch.optim.Adam} \\
+    \end{tabular}
+    \end{center}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} which line of the algorithm changes?
+
+    \pause
+
+    \alert{None.} Embedding $\to$ $[\,$attention $+$ MLP$\,]\times N$ $\to$ head $\to$ softmax, trained with cross-entropy and Adam. Only the \emph{representation} of numbers changes.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Step 1: \texttt{Value} $\to$ \texttt{torch.Tensor}}
+
+\begin{lstlisting}
+# microGPT: a list of Value objects, combined one by one
+x = [t + p for t, p in zip(tok_emb, pos_emb)]
+
+# PyTorch: ONE tensor, ONE vectorized op
+x = tok_emb + pos_emb
+\end{lstlisting}
+
+    A tensor is a whole array of numbers that the autograd engine treats as \alert{one node} --- the graph shrinks from thousands of scalar nodes to a handful of tensor nodes.
+
+    \pause
+
+\begin{lstlisting}
+loss.backward()   # same name, same chain rule, same idea
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} microGPT ended every Adam step with \code{p.grad = 0}. Where did that go?
+
+    \pause
+
+    \code{optimizer.zero\_grad()} --- same reason as before: \code{backward()} \alert{accumulates} with \code{+=}, so leftovers must be cleared every step.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Step 2: the Helpers Already Exist}
+
+\begin{lstlisting}
+# microGPT                      ->  PyTorch
+linear(x, w)                    ->  nn.Linear(n_in, n_out, bias=False)
+softmax(logits)                 ->  F.softmax(logits, dim=-1)
+rmsnorm(x)                      ->  x * (x.pow(2).mean(-1, keepdim=True)
+                                         + 1e-5).rsqrt()
+state_dict = {'wte': ..., ...}  ->  model.state_dict()
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} microGPT called its parameter dictionary \code{state\_dict}. Coincidence?
+
+    \pause
+
+    No --- it is named \alert{after PyTorch's} \code{model.state\_dict()}, on purpose. The 199-line file was always a PyTorch program in disguise. \\[2mm]
+    {\footnotesize (Watch the \code{bias=False} and the missing learnable scale in rmsnorm --- microGPT has no biases anywhere, so the faithful port doesn't either.)}
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Step 3: Loops $\to$ One Matrix Multiply}
+
+\begin{lstlisting}
+# microGPT: one token at a time, one head at a time (~10 lines of loops)
+# PyTorch: ALL positions, ALL heads, at once
+q = q.view(T, n_head, head_dim).transpose(0, 1)  # and same for k, v
+scores = q @ k.transpose(-2, -1) / head_dim**0.5  # every pair!
+scores = scores.masked_fill(causal_mask, float('-inf'))
+out = F.softmax(scores, dim=-1) @ v
+\end{lstlisting}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} last chapter we hunted for the $-\infty$ in microGPT and found \alert{none}. Why does it appear now?
+
+    \pause
+
+    microGPT processed tokens \alert{one at a time} --- the future literally didn't exist yet (masking by construction). Here we compute \alert{all positions in one shot}, so future pairs \emph{do} get scores --- and must be masked explicitly. \\[1mm]
+    \alert{Same causality, different bookkeeping.} That's the price of speed.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}[fragile]
+    \frametitle{Step 4: the Training Loop Barely Notices}
+
+\begin{lstlisting}
+# microGPT                          # PyTorch
+                                    opt = torch.optim.Adam(
+                                        model.parameters(), lr=0.01,
+                                        betas=(0.85, 0.99))
+for step in range(num_steps):       for step in range(num_steps):
+    ... forward, build loss ...         logits = model(tokens)
+    loss = (1/n) * sum(losses)          loss = F.cross_entropy(logits, targets)
+    loss.backward()                     loss.backward()
+    # 7 lines of Adam math              opt.step()
+    # p.grad = 0                        opt.zero_grad()
+\end{lstlisting}
+
+    \pause
+
+    Even \code{-probs[target].log()} collapses into \code{F.cross\_entropy} --- which you have been calling since Lab 6. The loop you have written all semester \alert{is} the loop that trains GPTs.
+\end{frame}
+
+% ----------------------------------------------------------------------
+\begin{frame}
+    \frametitle{What Did We Buy? (and What Did We Pay?)}
+
+    \textbf{Bought:}
+    \begin{itemize}
+        \item \alert{Speed}: the same 1{,}000 steps drop from $\sim$1 minute to \alert{seconds}; on a Colab GPU, models $100\times$ bigger become an afternoon project, not a fantasy.
+        \item \alert{Batching}: many names per step $\to$ smoother gradients, better hardware use.
+        \item \alert{The ecosystem}: optimizers, schedulers, checkpointing --- tested by millions.
+    \end{itemize}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} what did we pay?
+
+    \pause
+
+    \alert{Visibility.} \code{loss.backward()} is a black box again. That's exactly why we read microGPT \emph{first} --- now you know what's inside the box.
+
+    \pause
+
+    \begin{center}
+        And now that one training run takes \alert{seconds instead of a minute}\dots\\
+        we can afford to run \alert{many} of them and \emph{compare}. That is your task. $\to$
+    \end{center}
+\end{frame}

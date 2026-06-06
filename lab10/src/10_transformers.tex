@@ -1,0 +1,408 @@
+\section{Transformers}
+
+\begin{frame}
+    \frametitle{Previous Lecture}
+    
+    We already learn about following topics:
+    \begin{itemize}
+        \item Lab 9: Residual Networks (ResNets)
+        \item Lab 7: Normalization (BatchNorm, LayerNorm, etc.)
+        \item Lab 6: Deep Learning from Scratch
+        \item Lab 0: Review Python and Jupyter Notebooks
+    \end{itemize}
+
+    Today we will implement the Transformers architecture. Transformers are just a top of the previous topics with some modifications!
+\end{frame}
+
+\begin{frame}{The one idea to hold onto}
+  \begin{center}
+    \alert{A GPT is just}\\[2mm]
+    \large $\text{embedding} \;\to\; [\,\text{attention} + \text{MLP}\,]\times N \;\to\; \text{head} \;\to\; \text{softmax}$
+  \end{center}
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+      \textbf{You already built this}
+      \begin{itemize}
+        \item tensors / vectors
+        \item \texttt{loss.backward()}, \texttt{optimizer.step()}
+        \item the training loop
+        \item \texttt{softmax} + cross-entropy
+      \end{itemize}
+    \column{0.5\textwidth}
+      \textbf{Genuinely new today}
+      \begin{itemize}
+        \item[\textcolor{unistemerald}{$\bigstar$}] \alert{attention}
+      \end{itemize}
+      \vspace{4mm}
+      {\footnotesize Everything else is something from your last labs.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{What you did last time $\to$ what it becomes today}
+  \begin{center}
+  \renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{l@{\quad$\Rightarrow$\quad}l}
+    \textbf{Already in your toolbox} & \textbf{Today} \\\hline
+    \texttt{softmax} + cross-entropy & predict the \emph{next token} = classification \\
+    \texttt{loss.backward()} (a black box) & you'll \emph{read} the 14 lines that are it \\
+    a few \texttt{nn.Linear} + ReLU & the MLP inside every block \\
+    the training loop & \emph{unchanged} — it trains a GPT \\
+  \end{tabular}
+  \end{center}
+  \vfill
+  \begin{center}\footnotesize So: only \alert{attention} is new. Let's earn it.\end{center}
+\end{frame}
+
+% --- Embedding ---
+\begin{frame}
+    \frametitle{Embedding}
+
+    \begin{definition}[Embedding]
+        An \textbf{embedding} is a mapping from objects --- from words, molecules, even real world objects --- to vectors that we can do calculations with. The embedding is a learned function, and the vectors it produces are called \textbf{embeddings} of the original objects.
+    \end{definition}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} What is the \textbf{good} embedding?
+
+    \pause
+
+    To be honest, we don't know. But we can say that a good embedding is one that \textbf{makes the task easier} for the model. For example, if we are doing language modeling, a good embedding would be one that captures the meaning of words in a way that makes it easier for the model to predict the next word.
+\end{frame}
+
+\begin{frame}
+    \frametitle{Embedding: a Picture}
+
+    \begin{columns}[T,onlytextwidth]
+        \column{0.42\textwidth}
+            Each word becomes a \alert{point in space}.
+            \vspace{2mm}
+            \begin{itemize}
+                \item \texttt{"cat"} $\;\mapsto\; (1.6,\, 1.8)$
+                \item \texttt{"car"} $\;\mapsto\; (1.9,\, 0.4)$
+            \end{itemize}
+            \vspace{2mm}
+            Words with similar \emph{meaning} end up \alert{close together}.
+            \vspace{2mm}
+
+            {\footnotesize (Here $d=2$ so we can draw it. In a real GPT, $d$ is hundreds or thousands.)}
+            \vspace{2mm}
+
+            \pause
+
+            \textcolor{red}{\textbf{Question:}} where would \texttt{"puppy"} go? What about \texttt{"taxi"}?
+        \column{0.55\textwidth}
+            \begin{center}
+            \begin{tikzpicture}[scale=1.9, font=\scriptsize, >=Stealth]
+                % axes
+                \draw[->, gray] (0,0) -- (2.6,0) node[below] {$x_1$};
+                \draw[->, gray] (0,0) -- (0,2.4) node[left] {$x_2$};
+                % animal cluster
+                \fill[grn] (1.6,1.8) circle (1.4pt) node[above] {cat};
+                \fill[grn] (1.3,2.0) circle (1.4pt) node[above] {kitten};
+                \fill[grn] (1.9,1.6) circle (1.4pt) node[right] {dog};
+                \draw[grn, dashed] (1.6,1.8) ellipse (0.55 and 0.42);
+                % vehicle cluster
+                \fill[oge] (1.9,0.4) circle (1.4pt) node[below] {car};
+                \fill[oge] (2.3,0.6) circle (1.4pt) node[right] {truck};
+                \fill[oge] (1.7,0.7) circle (1.4pt) node[above left] {bus};
+                \draw[oge, dashed] (2.0,0.55) ellipse (0.55 and 0.42);
+                % token -> vector arrow
+                \node[draw=unistnavy, fill=gra, rounded corners=1pt, inner sep=2pt] (tok) at (0.5,1.6) {\texttt{"cat"}};
+                \draw[->, unistnavy, thick] (tok) -- (1.55,1.78);
+            \end{tikzpicture}
+            \end{center}
+    \end{columns}
+\end{frame}
+
+% Similarity
+
+\begin{frame}
+    \frametitle{Similarity in Embedding Space}
+
+    Now words are vectors. \textcolor{red}{\textbf{Question:}} how do we measure that \texttt{"cat"} is closer to \texttt{"kitten"} than to \texttt{"car"}?
+
+    \pause
+
+    \begin{definition}[Similarity]
+        \textbf{Similarity} in embedding space is a measure of how close two embeddings are. We compute it with the \alert{inner product}:
+        \[
+            \mathrm{sim}(u, v) = \langle u, v \rangle = u^\top v = \sum_{k=1}^{d} u_k v_k .
+        \]
+    \end{definition}
+
+    \pause
+
+    One number per pair: \alert{large} $\Rightarrow$ similar, \alert{small (or negative)} $\Rightarrow$ not similar.\footnote{You may have heard of \emph{cosine similarity} --- that is just the inner product after normalizing the lengths: $\langle u, v\rangle = \|u\|\|v\|\cos\theta$. We stick to the plain inner product today.}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Similarity: a Picture}
+
+    \begin{columns}[T,onlytextwidth]
+        \column{0.42\textwidth}
+            Same picture as before, but now look at the \alert{angles}.
+            \vspace{2mm}
+            \begin{itemize}
+                \item \textcolor{grn}{cat $\cdot$ kitten}: small angle $\Rightarrow$ \alert{large} inner product
+                \item \textcolor{oge}{cat $\cdot$ car}: large angle $\Rightarrow$ \alert{small} inner product
+            \end{itemize}
+            {\footnotesize (Here all vectors have about the same length, so the angle is what's left to vary.)}
+            \vspace{2mm}
+
+            \pause
+
+            \textcolor{red}{\textbf{Question:}} we have $n$ words. How many pairs do we need to compare?
+
+            \pause
+
+            All $n \times n$ of them... do we write a double \texttt{for} loop?
+        \column{0.55\textwidth}
+            \begin{center}
+            \begin{tikzpicture}[scale=1.9, font=\scriptsize, >=Stealth]
+                % axes
+                \draw[->, gray] (0,0) -- (2.6,0) node[below] {$x_1$};
+                \draw[->, gray] (0,0) -- (0,2.4) node[left] {$x_2$};
+                % vectors
+                \draw[->, grn, thick] (0,0) -- (1.6,1.8) node[above] {cat};
+                \draw[->, grn, thick] (0,0) -- (1.3,2.0) node[above] {kitten};
+                \draw[->, oge, thick] (0,0) -- (1.9,0.4) node[right] {car};
+                % angle marks
+                \draw[grn] (0.45,0.51) arc[start angle=48.4, end angle=57, radius=0.68];
+                \node[grn] at (0.62,0.78) {\tiny $\theta_{\text{small}}$};
+                \draw[oge] (0.50,0.105) arc[start angle=11.9, end angle=48.4, radius=0.51];
+                \node[oge] at (0.72,0.30) {\tiny $\theta_{\text{large}}$};
+            \end{tikzpicture}
+            \end{center}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame}
+    \frametitle{All Pairs at Once: Matrix Multiplication}
+
+    No \texttt{for} loop! Stack the $n$ embeddings as \alert{rows} of a matrix $X \in \mathbb{R}^{n \times d}$. Then
+    \[
+        S = X X^\top \in \mathbb{R}^{n \times n},
+        \qquad
+        S_{ij} = x_i^\top x_j = \mathrm{sim}(x_i, x_j).
+    \]
+
+    \pause
+
+    \begin{center}
+    \begin{tikzpicture}[scale=1.5, font=\scriptsize]
+        % X (n x d)
+        \draw[unistnavy, thick] (0,0) rectangle (0.9,1.2);
+        \fill[grn!40] (0,0.6) rectangle (0.9,0.9);
+        \node at (0.45,0.75) {\tiny $x_i^\top$};
+        \node at (0.45,1.4) {$X$};
+        \node at (0.45,-0.2) {\tiny $n \times d$};
+        % times
+        \node at (1.25,0.6) {$\times$};
+        % X^T (d x n)
+        \draw[unistnavy, thick] (1.6,0.15) rectangle (2.8,1.05);
+        \fill[oge!40] (2.2,0.15) rectangle (2.5,1.05);
+        \node at (2.35,0.6) {\tiny $x_j$};
+        \node at (2.2,1.4) {$X^\top$};
+        \node at (2.2,-0.2) {\tiny $d \times n$};
+        % equals
+        \node at (3.15,0.6) {$=$};
+        % S (n x n)
+        \draw[unistnavy, thick] (3.5,0) rectangle (4.7,1.2);
+        \fill[grn!25] (3.5,0.6) rectangle (4.7,0.9);
+        \fill[oge!25] (4.1,0) rectangle (4.4,1.2);
+        \fill[unistemerald!70] (4.1,0.6) rectangle (4.4,0.9);
+        \node at (4.25,0.75) {\tiny $S_{ij}$};
+        \node at (4.1,1.4) {$S$};
+        \node at (4.1,-0.2) {\tiny $n \times n$};
+    \end{tikzpicture}
+    \end{center}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} what does row $i$ of $S$ tell us?
+
+    \pause
+
+    How similar word $i$ is to \alert{every} word --- including itself. Remember this row; it is about to become \textbf{attention}.
+\end{frame}
+
+% --- Attention ---
+
+\begin{frame}{Attention in Language}
+  \begin{quote}
+    ``The cat that the dog chased \underline{\hspace{1.2cm}}\,''
+  \end{quote}
+  \begin{itemize}
+    \item To fill the blank you must look \alert{back} at the \emph{right} earlier word.
+    \item An MLP has a fixed input and \alert{no sense of order} or of which earlier word matters.
+    \item We need a way to \alert{mix information across positions, based on content}.
+    \item[] \hfill $\Rightarrow$ that mechanism is \textbf{attention}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Attention in Vision}
+    \begin{center}
+        \includegraphics[width=0.8\textwidth]{src/overthinking.jpg}
+    \end{center}\footnote{Image from \url{https://www.boredpanda.com/captcha-struggles-fails/}}
+\end{frame}
+
+\begin{frame}
+    \frametitle{From Similarity to Attention}
+
+    \textcolor{red}{\textbf{Question:}} we already have a similarity matrix $S = XX^\top$. Why not use it to decide \emph{which earlier words matter}?
+
+    \pause
+
+    That is almost exactly attention --- with one twist. Each word plays \alert{three roles}, each a learned linear map of $x$:
+    \begin{center}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{lll}
+        \textbf{Query} & $Q = X W_Q$ & ``what am I \emph{looking for}?'' \\
+        \textbf{Key}   & $K = X W_K$ & ``what do I \emph{offer}?'' \\
+        \textbf{Value} & $V = X W_V$ & ``what do I \emph{carry}?'' \\
+    \end{tabular}
+    \end{center}
+
+    \pause
+
+    Same picture as before, just with $Q$ and $K$ instead of $X$ and $X^\top$:
+    \[
+        S = Q K^\top \in \mathbb{R}^{n \times n}
+        \qquad \text{(still just inner products of all pairs!)}
+    \]
+\end{frame}
+
+\begin{frame}
+    \frametitle{Remark: Attention Measures Similarity in a New Basis}
+
+    \textcolor{red}{\textbf{Question:}} what does multiplying by $W_Q$ actually \emph{do} to an embedding?
+
+    \pause
+
+    \begin{columns}[T,onlytextwidth]
+        \column{0.55\textwidth}
+            A linear map \alert{recombines the basis}: each new axis is a mix of the old ones. So
+            \[
+                Q K^\top = (X W_Q)(X W_K)^\top = X \underbrace{\left(W_Q W_K^\top\right)}_{\text{learned!}} X^\top
+            \]
+            Attention does \emph{not} compare embeddings in their original coordinates --- it compares them in a \alert{learned, tilted basis} where the axes of the two words \alert{cross}.
+
+            \vspace{2mm}
+            \pause
+
+            The model gets to \emph{choose which directions of meaning matter} for matching. With $W_Q = W_K = I$ we would be back to plain $XX^\top$.
+        \column{0.42\textwidth}
+            \begin{center}
+            \begin{tikzpicture}[scale=1.3, font=\scriptsize, >=Stealth]
+                % original basis (gray)
+                \draw[->, gray, thick] (0,0) -- (1.6,0) node[below] {$e_1$};
+                \draw[->, gray, thick] (0,0) -- (0,1.6) node[left] {$e_2$};
+                % learned basis (tilted, emerald)
+                \draw[->, unistemerald, very thick] (0,0) -- (1.45,0.65) node[right] {$W e_1$};
+                \draw[->, unistemerald, very thick] (0,0) -- (-0.55,1.5) node[above] {$W e_2$};
+                % same point, two coordinate readings
+                \fill[oge] (0.9,1.1) circle (1.4pt) node[above right] {cat};
+                \draw[gray, dashed] (0.9,1.1) -- (0.9,0);
+                \draw[gray, dashed] (0.9,1.1) -- (0,1.1);
+            \end{tikzpicture}\\[1mm]
+            {\scriptsize same embedding, read off \\ in two \alert{crossing} bases}
+            \end{center}
+    \end{columns}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Attention: the Full Formula}
+
+    \begin{definition}[Attention]
+        \[
+            \mathrm{Attention}(Q, K, V) = \underbrace{\mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d}}\right)}_{\text{weights, each row sums to } 1} V
+        \]
+    \end{definition}
+
+    \pause
+
+    Read it from the inside out:
+    \begin{enumerate}
+        \item $QK^\top$: similarity of every pair --- you built this already.
+        \item $\mathrm{softmax}$ (row-wise): turn similarities into weights --- you built this already too!
+        \item $\cdots \times V$: each word's output is a \alert{weighted average of the values}.
+    \end{enumerate}
+
+    \pause
+
+    \textcolor{red}{\textbf{Question:}} so what is genuinely new here?
+
+    \pause
+
+    Only the idea of $Q$, $K$, $V$. The rest is matrix multiplication and softmax.
+\end{frame}
+
+\begin{frame}
+    \frametitle{Three Small Details (Brief!)}
+
+    \begin{columns}[T,onlytextwidth]
+        \column{0.58\textwidth}
+            \textbf{1. Scale by $\sqrt{d}$.} When $d$ is large, inner products get large, and softmax \alert{saturates}. Dividing by $\sqrt{d}$ keeps it in a healthy range. That's it.
+
+            \vspace{2mm}
+            \pause
+
+            \textbf{2. Causal masking.} GPT predicts the \emph{next} word, so position $i$ must not peek at the \alert{future} ($j > i$). We set those scores to $-\infty$ before softmax $\Rightarrow$ weight $0$.
+
+            \vspace{2mm}
+            \pause
+
+            \textbf{3. Multi-head.} Instead of one attention with width $d$, run $h$ \alert{smaller ones in parallel} (each width $d/h$) and concatenate. Each head can look for a different relationship.
+        \column{0.38\textwidth}
+            \begin{center}
+            \begin{tikzpicture}[scale=0.55, font=\tiny]
+                % causal mask grid 4x4 (row 0 at top)
+                \foreach \i in {0,...,3} {
+                    \foreach \j in {0,...,3} {
+                        \pgfmathparse{\j > \i ? 1 : 0}
+                        \ifnum\pgfmathresult>0
+                            \fill[gray!30] (\j,-\i) rectangle ++(1,-1);
+                            \node at (\j+0.5,-\i-0.5) {$-\infty$};
+                        \else
+                            \fill[unistemerald!30] (\j,-\i) rectangle ++(1,-1);
+                            \node at (\j+0.5,-\i-0.5) {$S_{\i\j}$};
+                        \fi
+                    }
+                }
+                \draw[unistnavy] (0,0) grid[step=1] (4,-4);
+                \draw[unistnavy, thick] (0,0) rectangle (4,-4);
+                \node[anchor=south] at (2,0.1) {keys $j \rightarrow$};
+                \node[anchor=south, rotate=90] at (-0.3,-2) {queries $i \rightarrow$};
+            \end{tikzpicture}\\[1mm]
+            {\scriptsize the causal mask: \\ gray = ``no peeking''}
+            \end{center}
+    \end{columns}
+\end{frame}
+
+\begin{frame}
+    \frametitle{See It on a Real Model (Live)}
+
+    \begin{columns}[c]
+        \column{0.33\textwidth}
+            \begin{center}
+                \qrcode[height=2.2cm]{https://poloclub.github.io/transformer-explainer/}\\[1mm]
+                {\footnotesize \textbf{Transformer Explainer}\\ real GPT-2 in your browser}
+            \end{center}
+        \column{0.33\textwidth}
+            \begin{center}
+                \qrcode[height=2.2cm]{https://bbycroft.net/llm}\\[1mm]
+                {\footnotesize \textbf{bbycroft.net/llm}\\ 3D data-flow walkthrough}
+            \end{center}
+        \column{0.33\textwidth}
+            \begin{center}
+                \qrcode[height=2.2cm]{https://www.3blue1brown.com/lessons/attention}\\[1mm]
+                {\footnotesize \textbf{3Blue1Brown}\\ attention, animated}
+            \end{center}
+    \end{columns}
+
+    \vfill
+    \begin{center}\footnotesize Type a sentence, change a word, watch the attention weights move.\end{center}
+\end{frame}
